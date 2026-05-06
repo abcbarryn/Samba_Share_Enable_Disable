@@ -50,6 +50,10 @@ Before running the script, ensure your system has the following installed:
    ```bash
    sudo cp -av share /usr/local/bin/share
    ```
+4. Install the man page:
+   ```bash
+   sudo cp -av share.1 /usr/local/share/man/man1
+   ```
 
 ## 📖 Usage
 
