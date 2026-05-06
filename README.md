@@ -69,7 +69,7 @@ sudo ./share {enable|disable} [share_name]
 | :--- | :--- |
 | `enable` | Sets `available = yes` for the specified share. |
 | `disable` | Sets `available = no` for the specified share. |
-| `share_name` | The name of the share block as defined in your `smbe.conf`. |
+| `share_name` | The name of the share block as defined in your `smb.conf`. |
 
 ### Examples
 
