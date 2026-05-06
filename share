@@ -1,0 +1,84 @@
+#!/bin/bash
+
+# 1. Check for root/sudo
+if [[ $EUID -ne 0 ]]; then
+   echo "This script needs root. Please run with sudo."
+   exit 1
+fi
+
+ACTION=$1
+SHARE_NAME=$2
+CONF_FILE="/etc/samba/smb.conf"
+USAGE="Usage: `basename \"$0\"` {enable|disable} sharename"
+
+# 2. Validate arguments and set VAL
+if [[ "$ACTION" == "disable" ]]; then
+    VAL="no"
+elif [[ "$ACTION" == "enable" ]]; then
+    VAL="yes"
+else
+    echo "$USAGE"
+    exit 1
+fi
+if [ $# -ne 2 ]; then
+    echo "$USAGE"
+    exit 1
+fi
+
+if [ ! -w "$CONF_FILE" ]; then
+    echo "Error: Unable to access $CONF_FILE"
+    exit 1
+fi
+
+# 3. Prepare Names
+[[ $SHARE_NAME != [* ]] && SHARE_NAME="[$SHARE_NAME]"
+SAFE_NAME=$(echo "$SHARE_NAME" | sed 's/\[/\\\[/g; s/\]/\\\]/g')
+
+# 4. Verify share existence
+if ! grep -qF "$SHARE_NAME" "$CONF_FILE"; then
+    echo "Error: Share $SHARE_NAME not found in $CONF_FILE"
+    exit 1
+fi
+
+# 5. Check if already in requested state (Avoids redundant reloads)
+# Pulls the block and checks if available = yes/no already matches
+CURRENT_STATE=$(sed -n "/^$SAFE_NAME/,/\(\[\|$\)/p" "$CONF_FILE" | grep "available\s*=" | awk -F'= ' '{print $2}' | xargs)
+if [[ "$CURRENT_STATE" == "$VAL" ]]; then
+    echo "Share $SHARE_NAME is already ${ACTION}d. No changes made."
+    exit 0
+fi
+
+SHARE_PATH=$(sed -n "/^$SAFE_NAME/,/\(\[\|$\)/p" "$CONF_FILE" | grep -i "^\s*path\s*=" | cut -d'=' -f2 | xargs)
+if [[ -d "$SHARE_PATH" ]]; then
+    if lsof +D "$SHARE_PATH" > /dev/null 2>&1; then
+        echo "Warning: Files are actively open in $SHARE_PATH"
+        lsof +D "$SHARE_PATH"
+        read -p "Force disconnect and disable? (y/N): " confirm
+        [[ $confirm != [yY] ]] && exit 1
+
+        # Kill processes holding those files open
+        fuser -k "$SHARE_PATH"
+        sleep 1
+    fi
+fi
+
+# 6. Create backup now that we know we have work to do
+cp -av "$CONF_FILE" "$CONF_FILE".bak
+
+# 7. Apply changes
+sed -i "/^$SAFE_NAME/,/\(\[\|$\)/ s/^\(\s*available\s*=\s*\).*/\1$VAL/" "$CONF_FILE"
+
+if ! sed -n "/^$SAFE_NAME/,/\(\[\|$\)/p" "$CONF_FILE" | grep -q "available\s*="; then
+    sed -i "/^$SAFE_NAME/a \   available = $VAL" "$CONF_FILE"
+fi
+
+# 8. Verify and Reload
+echo "Verifying configuration..."
+if /usr/bin/testparm >/dev/null </dev/null 2>&1 ; then
+    smbcontrol all reload-config
+    echo "Success: Share $SHARE_NAME is now ${ACTION}d (available = $VAL)."
+else
+    echo "Error: Configuration check failed! Reverting..."
+    cp -av "$CONF_FILE".bak "$CONF_FILE"
+    exit 1
+fi

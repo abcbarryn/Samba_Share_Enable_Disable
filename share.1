@@ -1,0 +1,60 @@
+.TH SHARE 1 "2026-05-04" "1.0" "User Commands"
+.SH NAME
+share \- enable or disable a Samba share availability
+.SH SYNOPSIS
+.B share
+.B {enable|disable}
+.B sharename
+.SH DESCRIPTION
+.B share
+is a shell script designed to automate the process of toggling the availability of a 
+specific Samba share within the /etc/samba/smb.conf configuration file. 
+.PP
+The script modifies the \fBavailable\fR parameter within the specified share section, 
+setting it to \fByes\fR for the \fBenable\fR action or \fBno\fR for the \fBdisable\fR 
+action.
+.PP
+This script must be executed with superuser privileges (e.g., via \fBsudo\fR).
+.SH ARGUMENTS
+.TP
+.B enable
+Sets the \fBavailable\fR parameter for the specified share to \fByes\fR.
+.TP
+.B disable
+Sets the \fBavailable\fR parameter for the specified share to \fBno\fR.
+.TP
+.B sharename
+The name of the share section to be modified as defined in /etc/samba/smb.conf.
+.SH BEHAVIOR
+.IP "Configuration Management:"
+The script performs an in-place edit of /etc/samba/smb.conf. Before applying any 
+changes, the script creates a backup of the original configuration file with a 
+\text{.bak} extension.
+.IP "Validation:"
+The script verifies that the requested share exists within the configuration file. 
+After modification, it runs \fBtestparm\fR to ensure the new configuration is 
+syntactically valid. If the configuration check fails, the script automatically 
+reverts the changes using the backup file.
+.IP "Process Handling:"
+If the script detects that files within the share's defined path are actively being 
+accessed by other processes (via \fblsof\fR), it will display a warning. The user 
+will be prompted to confirm whether to force-disconnect these processes using 
+\fbfuser\fR.
+.IP "Service Reload:"
+Upon a successful configuration update and validation, the script triggers a reload 
+of the Samba configuration using \fbsmbcontrol\fR.
+.SH EXIT STATUS
+.DT 0
+Success.
+.DT 1
+An error occurred (e.g., insufficient privileges, invalid arguments, share not found, 
+or configuration validation failure).
+.SH FILES
+.DT /etc/samba/smb.conf
+The primary Samba configuration file targeted by the script.
+.DT /etc/samba/smb.conf.bak
+The backup of the configuration file created by the script prior to modification.
+.SH SEE ALSO
+.BR smb.conf (5),
+.BR testparm (1),
+.BR smbcontrol (1)
